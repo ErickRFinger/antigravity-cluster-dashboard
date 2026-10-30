@@ -4,6 +4,10 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/api/gpu-telemetry",
+      "destination": "/api/gpu-telemetry.js"
+    },
+    {
       "source": "/api/status",
       "destination": "/api/status.js"
     },
@@ -42,7 +46,7 @@
         },
         {
           "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization"
+          "value": "Content-Type, Authorization, X-Target-Node"
         }
       ]
     }

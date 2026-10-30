@@ -45,7 +45,17 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify(data));
   };
 
-  // 1. API: /api/status
+  // 1. API: /api/gpu-telemetry
+  if (pathname === '/api/gpu-telemetry') {
+    try {
+      const { default: handler } = await import('./api/gpu-telemetry.js');
+      return handler(req, res);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // 2. API: /api/status
   if (pathname === '/api/status') {
     try {
       const { default: handler } = await import('./api/status.js');
@@ -55,7 +65,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // 2. API: /api/proxy (Direct Proxy to Ollama Node)
+  // 3. API: /api/proxy (Direct Proxy to Ollama Node)
   if (pathname === '/api/proxy') {
     try {
       const { default: handler } = await import('./api/proxy.js');
@@ -65,7 +75,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // 3. Static Files
+  // 4. Static Files
   let filePath = path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname);
 
   if (!filePath.startsWith(PUBLIC_DIR)) {

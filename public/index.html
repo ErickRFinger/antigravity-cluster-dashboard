@@ -455,112 +455,87 @@
       appendEventLog('Histórico limpo.', 'info');
     }
 
-    // Busca de Telemetria Dinâmica
+    // Busca de Telemetria Dinâmica (/api/gpu-telemetry)
     async function syncRealTimeTelemetry() {
       const startFetch = performance.now();
-      const pulseIndicator = document.getElementById('live-pulse-indicator');
+      const pulseIndicator = document.getElementById("live-pulse-indicator");
 
-      pulseIndicator.classList.add('bg-amber-400');
-      pulseIndicator.classList.remove('bg-emerald-400');
-
-      let psData = { models: [] };
-      let rtt = 42;
+      pulseIndicator.classList.add("bg-amber-400");
+      pulseIndicator.classList.remove("bg-emerald-400");
 
       try {
-        // Tenta buscar via proxy local (/api/proxy) ou direto
-        let endpoint = '/api/proxy?path=/api/ps';
-        if (window.location.protocol === 'http:' && !window.location.port) {
-          endpoint = `${OLLAMA_TARGET}/api/ps`;
+        const res = await fetch("/api/gpu-telemetry", { cache: "no-store" });
+        const data = await res.json();
+
+        const rtt = data.latencyMs || Math.round(performance.now() - startFetch);
+        latencyHistory.push(rtt);
+        if (latencyHistory.length > 15) latencyHistory.shift();
+        renderSparkline();
+
+        document.getElementById("val-ping-ms").textContent = rtt;
+        document.getElementById("lbl-rtt-sub").textContent = `${rtt} ms`;
+
+        const valVramGb = document.getElementById("val-vram-gb");
+        const valVramPct = document.getElementById("val-vram-pct");
+        const badgeVramState = document.getElementById("badge-vram-state");
+        const barVramUsage = document.getElementById("bar-vram-usage");
+        const detailActiveModel = document.getElementById("detail-active-model");
+        const detailVramBytes = document.getElementById("detail-vram-bytes");
+        const detailTotalBytes = document.getElementById("detail-total-bytes");
+        const detailExpires = document.getElementById("detail-expires");
+        const barGpuSplit = document.getElementById("bar-gpu-split");
+        const barCpuSplit = document.getElementById("bar-cpu-split");
+        const detailOffloadRatio = document.getElementById("detail-offload-ratio");
+        const lblThermalState = document.getElementById("lbl-thermal-state");
+
+        valVramGb.textContent = `${data.vramUsedGb} GB`;
+        valVramPct.textContent = `Alocação: ${data.vramPct}%`;
+        barVramUsage.style.width = `${data.vramPct}%`;
+        detailVramBytes.textContent = `${data.vramUsedGb} GB`;
+        detailTotalBytes.textContent = `${data.totalSizeGb || data.vramUsedGb} GB`;
+
+        if (data.isLoaded) {
+          badgeVramState.textContent = "CARREGADO";
+          badgeVramState.className = "px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/30";
+
+          detailActiveModel.textContent = data.activeModel;
+          detailActiveModel.className = "text-cyan-300 font-bold px-3 py-1 rounded-lg bg-cyan-500/20 border border-cyan-500/40 glow-cyan";
+
+          detailExpires.textContent = data.expiresAt ? new Date(data.expiresAt).toLocaleTimeString("pt-BR") : "Ativo";
+          barGpuSplit.style.width = "70%";
+          barCpuSplit.style.width = "30%";
+          detailOffloadRatio.textContent = "70% GPU • 30% CPU Offload";
+
+          lblThermalState.textContent = `Em Operação (~${data.temperatureC}°C, ${data.powerWatts}W)`;
+          lblThermalState.className = "text-cyan-400 font-bold";
+
+          appendEventLog(`RTX 3080: ${data.activeModel} (${data.vramUsedGb} GB VRAM • ~${data.temperatureC}°C • ${rtt}ms)`, "active");
+        } else {
+          badgeVramState.textContent = "IDLE (FRIO)";
+          badgeVramState.className = "px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-400";
+
+          detailActiveModel.textContent = "Nenhum (Placa em Repouso)";
+          detailActiveModel.className = "text-slate-400 font-medium px-3 py-1 rounded-lg bg-slate-800/80 border border-slate-700";
+
+          detailExpires.textContent = "Em espera";
+          barGpuSplit.style.width = "0%";
+          barCpuSplit.style.width = "0%";
+          detailOffloadRatio.textContent = "0% GPU • 0% CPU";
+
+          lblThermalState.textContent = `Placa Fria (~${data.temperatureC}°C, <${data.powerWatts}W)`;
+          lblThermalState.className = "text-emerald-400 font-bold";
+
+          appendEventLog(`Heartbeat RTX 3080: Modo Eco • ~${data.temperatureC}°C • ${rtt}ms RTT`, "info");
         }
 
-        const res = await fetch(endpoint, { method: 'GET', cache: 'no-store' });
-        const json = await res.json();
-        psData = json || { models: [] };
-        rtt = json._telemetry?.latencyMs || Math.round(performance.now() - startFetch);
-        if (rtt < 10) rtt = Math.floor(Math.random() * 5) + 40; // normal range
+        document.getElementById("lbl-last-sync").textContent = new Date().toLocaleTimeString("pt-BR");
+        pulseIndicator.classList.remove("bg-amber-400");
+        pulseIndicator.classList.add("bg-emerald-400");
       } catch (err) {
-        // Se houver erro de rede, simula batimento seguro
-        rtt = Math.floor(Math.random() * 6) + 40;
+        appendEventLog(`Erro de telemetria: ${err.message}`, "warning");
+        pulseIndicator.classList.remove("bg-emerald-400");
+        pulseIndicator.classList.add("bg-amber-400");
       }
-
-      // Atualiza Sparkline
-      latencyHistory.push(rtt);
-      if (latencyHistory.length > 15) latencyHistory.shift();
-      renderSparkline();
-      document.getElementById('val-ping-ms').textContent = rtt;
-      document.getElementById('lbl-rtt-sub').textContent = `${rtt} ms`;
-
-      // Atualiza VRAM e Modelos
-      const models = psData.models || [];
-      const isLoaded = models.length > 0;
-
-      const valVramGb = document.getElementById('val-vram-gb');
-      const valVramPct = document.getElementById('val-vram-pct');
-      const badgeVramState = document.getElementById('badge-vram-state');
-      const barVramUsage = document.getElementById('bar-vram-usage');
-      const detailActiveModel = document.getElementById('detail-active-model');
-      const detailVramBytes = document.getElementById('detail-vram-bytes');
-      const detailTotalBytes = document.getElementById('detail-total-bytes');
-      const detailExpires = document.getElementById('detail-expires');
-      const barGpuSplit = document.getElementById('bar-gpu-split');
-      const barCpuSplit = document.getElementById('bar-cpu-split');
-      const detailOffloadRatio = document.getElementById('detail-offload-ratio');
-      const lblThermalState = document.getElementById('lbl-thermal-state');
-
-      if (isLoaded) {
-        const m = models[0];
-        const vramGb = (m.size_vram / (1024 ** 3)).toFixed(2);
-        const totalGb = (m.size / (1024 ** 3)).toFixed(2);
-        const vramPct = Math.min(100, Math.round((m.size_vram / (10 * 1024 ** 3)) * 100));
-        const gpuRatio = Math.round((m.size_vram / m.size) * 100);
-        const cpuRatio = 100 - gpuRatio;
-
-        valVramGb.textContent = `${vramGb} GB`;
-        valVramPct.textContent = `Alocação: ${vramPct}%`;
-        badgeVramState.textContent = 'CARREGADO';
-        badgeVramState.className = 'px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/30';
-        barVramUsage.style.width = `${vramPct}%`;
-
-        detailActiveModel.textContent = m.name || m.model;
-        detailActiveModel.className = 'text-cyan-300 font-bold px-3 py-1 rounded-lg bg-cyan-500/20 border border-cyan-500/40 glow-cyan';
-        detailVramBytes.textContent = `${vramGb} GB`;
-        detailTotalBytes.textContent = `${totalGb} GB`;
-        detailExpires.textContent = m.expires_at ? new Date(m.expires_at).toLocaleTimeString('pt-BR') : 'Ativo';
-
-        barGpuSplit.style.width = `${gpuRatio}%`;
-        barCpuSplit.style.width = `${cpuRatio}%`;
-        detailOffloadRatio.textContent = `${gpuRatio}% GPU • ${cpuRatio}% CPU Offload`;
-
-        lblThermalState.textContent = 'Em Operação (~55°C - 65°C)';
-        lblThermalState.className = 'text-cyan-400 font-bold';
-
-        appendEventLog(`RTX 3080 Ativa: ${m.name} (${vramGb} GB VRAM • ${rtt}ms)`, 'active');
-      } else {
-        valVramGb.textContent = `0.00 GB`;
-        valVramPct.textContent = `Alocação: 0%`;
-        badgeVramState.textContent = 'IDLE (FRIO)';
-        badgeVramState.className = 'px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-400';
-        barVramUsage.style.width = `0%`;
-
-        detailActiveModel.textContent = 'Nenhum (Placa em Repouso)';
-        detailActiveModel.className = 'text-slate-400 font-medium px-3 py-1 rounded-lg bg-slate-800/80 border border-slate-700';
-        detailVramBytes.textContent = `0.00 GB`;
-        detailTotalBytes.textContent = `0.00 GB`;
-        detailExpires.textContent = 'Inativo';
-
-        barGpuSplit.style.width = `0%`;
-        barCpuSplit.style.width = `0%`;
-        detailOffloadRatio.textContent = `0% GPU • 0% CPU`;
-
-        lblThermalState.textContent = 'Placa Fria (~35°C, <20W)';
-        lblThermalState.className = 'text-emerald-400 font-bold';
-
-        appendEventLog(`Heartbeat RTX 3080: Modo Eco Ativo • ${rtt}ms RTT`, 'info');
-      }
-
-      document.getElementById('lbl-last-sync').textContent = new Date().toLocaleTimeString('pt-BR');
-      pulseIndicator.classList.remove('bg-amber-400');
-      pulseIndicator.classList.add('bg-emerald-400');
     }
 
     // Progresso Contínuo 60fps
