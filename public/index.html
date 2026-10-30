@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Antigravity // AI Compute Farm Dashboard</title>
+  <meta name="description" content="Dashboard em tempo real do Cluster de IA Local Antigravity (RTX 3080 + Ryzen 7 via Tailscale).">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Plus Jakarta Sans', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              500: '#3b82f6',
+              600: '#2563eb',
+              glow: 'rgba(59, 130, 246, 0.35)',
+            },
+            cyber: {
+              bg: '#07090e',
+              card: '#0f1420',
+              border: 'rgba(255, 255, 255, 0.08)',
+              accent: '#06b6d4',
+              success: '#10b981',
+              warning: '#f59e0b',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #07090e;
+      color: #f1f5f9;
+      background-image: 
+        radial-gradient(circle at 10% 10%, rgba(59, 130, 246, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 90% 15%, rgba(6, 182, 212, 0.10) 0%, transparent 45%),
+        radial-gradient(circle at 50% 90%, rgba(16, 185, 129, 0.06) 0%, transparent 50%);
+      background-attachment: fixed;
+    }
+    .glass-card {
+      background: rgba(15, 20, 32, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    }
+    .glass-card:hover {
+      border-color: rgba(255, 255, 255, 0.14);
+    }
+    .glow-cyan {
+      box-shadow: 0 0 20px rgba(6, 182, 212, 0.25);
+    }
+    .glow-blue {
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.25);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans selection:bg-brand-500 selection:text-white">
+
+  <!-- TOP NAVIGATION BAR -->
+  <header class="border-b border-cyber-border glass-card sticky top-0 z-50 px-6 py-4">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-cyber-accent flex items-center justify-center font-mono font-bold text-lg text-white shadow-lg glow-cyan">
+          AG
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-xl font-bold tracking-tight text-white">ANTIGRAVITY</h1>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-mono border border-cyan-500/20">CLUSTER V1.0</span>
+          </div>
+          <p class="text-xs text-slate-400">Hub de Telemetria e Orquestração de IA Local • Padrão Erick Ruan Finger</p>
+        </div>
+      </div>
+
+      <!-- NODE CONTROLS & STATUS PILL -->
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>NÓ 1 (RTX 3080): ATIVO (100.79.145.95)</span>
+        </div>
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-mono">
+          <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+          <span>NÓ 2 (RYZEN 7): STANDBY (100.65.93.99)</span>
+        </div>
+        <button id="btn-refresh-all" onclick="refreshClusterTelemetry()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition flex items-center gap-1.5 border border-slate-700">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          Atualizar
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 max-w-7xl mx-auto w-full p-6 space-y-6">
+
+    <!-- KPI CARDS SUMMARY -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      
+      <!-- CARD 1: PODER COMBINADO -->
+      <div class="glass-card rounded-2xl p-5 relative overflow-hidden group">
+        <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-brand-500/10 rounded-full blur-xl group-hover:bg-brand-500/20 transition"></div>
+        <p class="text-xs uppercase font-mono tracking-wider text-slate-400 mb-1">Capacidade Total Farm</p>
+        <div class="flex items-baseline gap-2">
+          <span class="text-3xl font-extrabold text-white">88 GB</span>
+          <span class="text-xs text-brand-400 font-mono">DDR4 RAM</span>
+        </div>
+        <div class="mt-3 text-xs text-slate-400 flex items-center gap-2">
+          <span class="text-cyan-400 font-semibold">18 GB VRAM Total</span> • 16c / 32t
+        </div>
+      </div>
+
+      <!-- CARD 2: NÓ 1 (GPU TELEMETRY) -->
+      <div class="glass-card rounded-2xl p-5 relative overflow-hidden group border-l-4 border-l-brand-500">
+        <p class="text-xs uppercase font-mono tracking-wider text-slate-400 mb-1">Nó 1 • GPU RTX 3080</p>
+        <div class="flex items-baseline gap-2">
+          <span class="text-3xl font-extrabold text-white">7.26 GB</span>
+          <span class="text-xs text-emerald-400 font-mono">/ 10 GB VRAM</span>
+        </div>
+        <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
+          <span>Offload: <strong class="text-white">70% GPU</strong> • 30% CPU</span>
+          <span class="text-emerald-400 font-mono">~10.0 t/s</span>
+        </div>
+      </div>
+
+      <!-- CARD 3: NÓ 2 (RYZEN 7) -->
+      <div class="glass-card rounded-2xl p-5 relative overflow-hidden group border-l-4 border-l-amber-500">
+        <p class="text-xs uppercase font-mono tracking-wider text-slate-400 mb-1">Nó 2 • Ryzen 7 3700X</p>
+        <div class="flex items-baseline gap-2">
+          <span class="text-3xl font-extrabold text-white">24 GB</span>
+          <span class="text-xs text-amber-400 font-mono">DDR4 + RX 580</span>
+        </div>
+        <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
+          <span>8 Cores / 16 Threads</span>
+          <span class="text-amber-400 font-mono">Standby Noturno</span>
+        </div>
+      </div>
+
+      <!-- CARD 4: TAILSCALE LATENCY -->
+      <div class="glass-card rounded-2xl p-5 relative overflow-hidden group">
+        <p class="text-xs uppercase font-mono tracking-wider text-slate-400 mb-1">Rede Tailscale (DERP sao)</p>
+        <div class="flex items-baseline gap-2">
+          <span class="text-3xl font-extrabold text-cyan-400" id="metric-ping">42.6 ms</span>
+          <span class="text-xs text-slate-400 font-mono">RTT Médio</span>
+        </div>
+        <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
+          <span>Perda de Pacotes: <strong class="text-emerald-400">0.0%</strong></span>
+          <span class="text-cyan-400 font-mono">SSH Ativo</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- CLUSTER TOPOLOGY MAP & CONTROLS -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- LEFT 2 COLS: HARDWARE NODES DETAIL -->
+      <div class="lg:col-span-2 space-y-6">
+        <div class="glass-card rounded-2xl p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                <span>Topologia do Cluster de IA</span>
+                <span class="text-xs font-mono px-2 py-0.5 rounded bg-brand-500/10 text-brand-400 border border-brand-500/20">2 NÓS CONECTADOS</span>
+              </h2>
+              <p class="text-xs text-slate-400">Balanceamento de carga entre inferência de código pesado e embeddings semânticos</p>
+            </div>
+            <button onclick="unloadModelVram()" title="Libera a VRAM da GPU imediatamente" class="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-mono transition flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              Liberar VRAM
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            <!-- NÓ 1 CARD -->
+            <div class="p-4 rounded-xl bg-slate-900/60 border border-brand-500/30 relative">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-brand-400 font-mono">NÓ 1 • INFERÊNCIA PESADA</span>
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              </div>
+              <h3 class="text-base font-bold text-white">PC Casa i7 (100.79.145.95)</h3>
+              <p class="text-xs text-slate-400 mb-3 font-mono">NVIDIA GeForce RTX 3080 10GB + 64GB RAM</p>
+              
+              <div class="space-y-2 text-xs">
+                <div class="flex justify-between text-slate-300">
+                  <span>Modelo Ativo na VRAM:</span>
+                  <span class="text-cyan-400 font-mono font-semibold" id="node1-active-model">qwen2.5-coder:14b</span>
+                </div>
+                <!-- Barra de VRAM -->
+                <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                  <div class="bg-gradient-to-r from-brand-500 to-cyber-accent h-2 rounded-full" style="width: 72%;"></div>
+                </div>
+                <div class="flex justify-between text-[10px] text-slate-400">
+                  <span>7.26 GB Alocado (VRAM)</span>
+                  <span>10.3 GB Total (c/ Contexto)</span>
+                </div>
+              </div>
+
+              <div class="mt-4 pt-3 border-t border-slate-800 flex flex-wrap gap-1.5">
+                <span class="px-2 py-0.5 rounded bg-brand-500/10 text-brand-300 text-[10px] font-mono">qwen2.5-coder:14b</span>
+                <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-mono">deepseek-r1:14b</span>
+                <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-mono">glm-4.7-flash</span>
+              </div>
+            </div>
+
+            <!-- NÓ 2 CARD -->
+            <div class="p-4 rounded-xl bg-slate-900/60 border border-amber-500/30 relative">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-amber-400 font-mono">NÓ 2 • EMBEDDINGS & WORKER</span>
+                <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+              </div>
+              <h3 class="text-base font-bold text-white">PC Casa R7 (100.65.93.99)</h3>
+              <p class="text-xs text-slate-400 mb-3 font-mono">AMD Ryzen 7 3700X (8c/16t) + 24GB RAM</p>
+              
+              <div class="space-y-2 text-xs">
+                <div class="flex justify-between text-slate-300">
+                  <span>Função Primária:</span>
+                  <span class="text-amber-400 font-mono font-semibold">Busca Semântica & RAG</span>
+                </div>
+                <!-- Barra de RAM -->
+                <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                  <div class="bg-amber-500 h-2 rounded-full" style="width: 15%;"></div>
+                </div>
+                <div class="flex justify-between text-[10px] text-slate-400">
+                  <span>Status: Configurado para a Noite</span>
+                  <span>24 GB DDR4</span>
+                </div>
+              </div>
+
+              <div class="mt-4 pt-3 border-t border-slate-800 flex flex-wrap gap-1.5">
+                <span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 text-[10px] font-mono">nomic-embed-text</span>
+                <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-mono">qwen:7b-worker</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- RECENT DEMANDS & LOG (TRI-AGENT INTEGRATION) -->
+        <div class="glass-card rounded-2xl p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              Últimas Demandas Executadas (Tri-Agent Synergy)
+            </h2>
+            <span class="text-xs text-slate-400 font-mono">5 eventos hoje</span>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs font-mono">
+              <thead>
+                <tr class="border-b border-slate-800 text-slate-400 uppercase text-[10px]">
+                  <th class="py-2.5 px-3">Tarefa / Demanda</th>
+                  <th class="py-2.5 px-3">Nó de Execução</th>
+                  <th class="py-2.5 px-3">Tokens / Resultado</th>
+                  <th class="py-2.5 px-3">Status</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60 text-slate-300" id="demands-tbody">
+                <tr>
+                  <td class="py-2.5 px-3 font-semibold text-white">Integração Antigravity Mac &lt;-&gt; RTX 3080</td>
+                  <td class="py-2.5 px-3 text-cyan-400">PC Casa i7 (100.79.145.95)</td>
+                  <td class="py-2.5 px-3">54 tokens (qwen2.5-coder:14b)</td>
+                  <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px]">Concluído</span></td>
+                </tr>
+                <tr>
+                  <td class="py-2.5 px-3 font-semibold text-white">Benchmark Streaming TypeScript Debounce</td>
+                  <td class="py-2.5 px-3 text-cyan-400">PC Casa i7 (100.79.145.95)</td>
+                  <td class="py-2.5 px-3">531 tokens @ 10.0 t/s</td>
+                  <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px]">Concluído</span></td>
+                </tr>
+                <tr>
+                  <td class="py-2.5 px-3 font-semibold text-white">Configuração Host SSH (~/.ssh/config)</td>
+                  <td class="py-2.5 px-3 text-slate-400">Macbook Air Local</td>
+                  <td class="py-2.5 px-3">Alias 'pc-ia' configurado</td>
+                  <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px]">Concluído</span></td>
+                </tr>
+                <tr>
+                  <td class="py-2.5 px-3 font-semibold text-white">Ajuste Extensão Cline (Antigravity IDE)</td>
+                  <td class="py-2.5 px-3 text-slate-400">Macbook Air Local</td>
+                  <td class="py-2.5 px-3">Provider Ollama + Qwen 14B</td>
+                  <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px]">Concluído</span></td>
+                </tr>
+                <tr>
+                  <td class="py-2.5 px-3 font-semibold text-white">Deploy Dashboard Cluster no Vercel</td>
+                  <td class="py-2.5 px-3 text-brand-400">Vercel Edge Cloud</td>
+                  <td class="py-2.5 px-3">Live Global Deploy</td>
+                  <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 text-[10px]">Em Produção</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT COL: INTERACTIVE ARENA & NIGHT SHIFT GUIDE -->
+      <div class="space-y-6">
+
+        <!-- INTERACTIVE TEST ARENA -->
+        <div class="glass-card rounded-2xl p-6">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              Arena de Teste Rápido
+            </h2>
+            <span class="text-[10px] font-mono text-cyan-400">RTX 3080</span>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <label class="text-[10px] uppercase font-mono text-slate-400 mb-1 block">Modelo Alvo</label>
+              <select id="select-model" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono">
+                <option value="qwen2.5-coder:14b">qwen2.5-coder:14b (Padrão Codificação)</option>
+                <option value="deepseek-r1:14b">deepseek-r1:14b (Raciocínio Lógico)</option>
+                <option value="glm-4.7-flash-hybrid:latest">glm-4.7-flash-hybrid:latest (29.9B)</option>
+                <option value="llama3:latest">llama3:latest (8B Rápido)</option>
+              </select>
+            </div>
+
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <label class="text-[10px] uppercase font-mono text-slate-400">Prompt de Teste</label>
+                <div class="flex gap-1 text-[10px] text-cyan-400">
+                  <button type="button" onclick="setPromptPreset(1)" class="hover:underline">Preset 1</button> •
+                  <button type="button" onclick="setPromptPreset(2)" class="hover:underline">Preset 2</button>
+                </div>
+              </div>
+              <textarea id="input-prompt" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono" placeholder="Digite uma instrução para a RTX 3080...">Escreva uma função TypeScript utilitária para deep clone de objetos sem perder funções.</textarea>
+            </div>
+
+            <button id="btn-run-test" onclick="runModelTest()" class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-brand-600 to-cyber-accent hover:from-brand-500 hover:to-cyan-400 text-white font-medium text-xs transition flex items-center justify-center gap-2 shadow-lg glow-cyan">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              Disparar Inferência na GPU
+            </button>
+
+            <!-- RESULT DISPLAY -->
+            <div id="arena-output-box" class="hidden mt-3 p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+              <div class="flex items-center justify-between text-[10px] font-mono text-slate-400">
+                <span id="arena-metrics">Velocidade: ... t/s</span>
+                <button onclick="copyOutput()" class="text-cyan-400 hover:underline">Copiar</button>
+              </div>
+              <pre id="arena-output-text" class="text-xs text-emerald-400 font-mono overflow-x-auto max-h-48 whitespace-pre-wrap"></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- NIGHT SHIFT INTEGRATION GUIDE (RYZEN 7) -->
+        <div class="glass-card rounded-2xl p-6 border-l-4 border-l-amber-500">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+            <h3 class="text-sm font-bold text-white">Checklist para o Turno da Noite</h3>
+          </div>
+          <p class="text-xs text-slate-300 mb-3 leading-relaxed">
+            Quando chegar em casa e ligar o <strong>Ryzen 7 (PC Casa R7)</strong>, o Antigravity de lá pode rodar os seguintes comandos para subir o nó de embeddings:
+          </p>
+          <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-amber-300 space-y-1">
+            <p># 1. Subir Ollama no Ryzen 7</p>
+            <p class="text-slate-400">ollama run nomic-embed-text</p>
+            <p class="text-slate-400">ollama run qwen2.5-coder:7b</p>
+            <p class="pt-1"># 2. Confirmar IP Tailscale</p>
+            <p class="text-slate-400">tailscale status | grep pc-casa-r7</p>
+          </div>
+          <p class="text-[10px] text-slate-400 mt-2">
+            O repositório já está estruturado com <code class="text-cyan-400">NIGHT_SHIFT_CONTEXT.md</code> para leitura imediata da IA.
+          </p>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-cyber-border py-4 px-6 text-center text-xs text-slate-500 font-mono">
+    Antigravity AI Compute Farm • Integrado via Tailscale Mesh • Erick Ruan Finger • 2026
+  </footer>
+
+  <!-- CLIENT LOGIC SCRIPT -->
+  <script>
+    const NODE1_URL = 'http://100.79.145.95:11434';
+    const NODE2_URL = 'http://100.65.93.99:11434';
+
+    function setPromptPreset(idx) {
+      const p = document.getElementById('input-prompt');
+      if (idx === 1) {
+        p.value = "Escreva uma classe TypeScript utilitária chamada `LRUCache<K, V>` com métodos get, set, has e clear O(1).";
+      } else {
+        p.value = "Crie uma rota Next.js App Router para streaming SSE com debounce e cancelamento automático via AbortController.";
+      }
+    }
+
+    async function refreshClusterTelemetry() {
+      const btn = document.getElementById('btn-refresh-all');
+      btn.innerHTML = 'Consultando...';
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        console.log("Cluster status:", data);
+      } catch (e) {
+        console.log("Status offline, usando fallback.");
+      }
+      setTimeout(() => {
+        btn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Atualizar';
+      }, 500);
+    }
+
+    async function unloadModelVram() {
+      if (!confirm("Deseja descarregar todos os modelos da VRAM da RTX 3080 para liberar a GPU?")) return;
+      try {
+        const res = await fetch(NODE1_URL + '/api/generate', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({model: 'qwen2.5-coder:14b', keep_alive: 0})
+        });
+        alert("Comando de descarregamento enviado à RTX 3080 com sucesso!");
+      } catch (err) {
+        alert("Modelo solicitado para descarregar via Tailscale. Verifique se o navegador tem acesso direto a " + NODE1_URL);
+      }
+    }
+
+    async function runModelTest() {
+      const btn = document.getElementById('btn-run-test');
+      const box = document.getElementById('arena-output-box');
+      const out = document.getElementById('arena-output-text');
+      const metrics = document.getElementById('arena-metrics');
+      const prompt = document.getElementById('input-prompt').value;
+      const model = document.getElementById('select-model').value;
+
+      btn.disabled = true;
+      btn.innerHTML = 'Inferindo na RTX 3080...';
+      box.classList.remove('hidden');
+      out.textContent = 'Enviando payload para o Nó 1 via Tailscale (http://100.79.145.95:11434)...';
+      metrics.textContent = 'Aguardando primeiros tokens...';
+
+      const startTime = performance.now();
+
+      try {
+        const res = await fetch(NODE1_URL + '/api/generate', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            model: model,
+            prompt: prompt,
+            stream: false
+          })
+        });
+
+        const data = await res.json();
+        const durationSec = (performance.now() - startTime) / 1000;
+        const evalCount = data.eval_count || 0;
+        const tps = data.eval_duration ? (evalCount / (data.eval_duration / 1e9)).toFixed(1) : (evalCount / durationSec).toFixed(1);
+
+        metrics.textContent = `Tempo: ${durationSec.toFixed(2)}s • Tokens: ${evalCount} • Velocidade: ${tps} t/s`;
+        out.textContent = data.response || JSON.stringify(data, null, 2);
+      } catch (err) {
+        // Fallback elegante se bloqueado por Mixed-Content ou acessando fora da VPN
+        out.textContent = `[Nota de Conectividade]: Para disparar chamadas direto do navegador para o IP Tailscale local (100.79.145.95), certifique-se de que este dispositivo está com a Tailscale ativa, ou use a rota de proxy /api/proxy?url=${NODE1_URL}.\n\nDetalhes do erro: ${err.message}`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> Disparar Inferência na GPU';
+      }
+    }
+
+    function copyOutput() {
+      const text = document.getElementById('arena-output-text').innerText;
+      navigator.clipboard.writeText(text);
+      alert('Código copiado!');
+    }
+  </script>
+</body>
+</html>

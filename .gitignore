@@ -1,0 +1,11 @@
+# Dependências e Builds
+node_modules/
+.vercel/
+dist/
+build/
+.DS_Store
+
+# Variáveis locais
+.env
+.env.local
+*.log
