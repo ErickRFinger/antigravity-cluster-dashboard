@@ -1,15 +1,40 @@
-// Vercel Serverless Function & Local Proxy Helper - Real-Time Ollama Relay
+// Vercel Serverless Function & Local Proxy Helper - Universal Node & Cloud
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Target-Node');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+  // Safe CORS Headers
+  if (typeof res.setHeader === 'function') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Target-Node');
   }
 
-  const targetNode = req.query.url || req.headers['x-target-node'] || 'http://100.79.145.95:11434';
-  const apiPath = req.query.path || '/api/ps';
+  if (req.method === 'OPTIONS') {
+    if (typeof res.status === 'function') return res.status(200).end();
+    res.writeHead(200);
+    return res.end();
+  }
+
+  // Universal query parser
+  let query = req.query;
+  if (!query && req.url) {
+    try {
+      const u = new URL(req.url, 'http://localhost');
+      query = Object.fromEntries(u.searchParams.entries());
+    } catch {
+      query = {};
+    }
+  }
+  query = query || {};
+
+  const targetNode = query.url || req.headers?.['x-target-node'] || 'http://100.79.145.95:11434';
+  const apiPath = query.path || '/api/ps';
+
+  const sendJson = (code, obj) => {
+    if (typeof res.status === 'function' && typeof res.json === 'function') {
+      return res.status(code).json(obj);
+    }
+    res.writeHead(code, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(obj));
+  };
 
   try {
     const cleanBase = targetNode.replace(/\/+$/, '');
@@ -17,10 +42,10 @@ export default async function handler(req, res) {
     const destinationUrl = `${cleanBase}${cleanPath}`;
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), 12000);
 
     const options = {
-      method: req.method,
+      method: req.method || 'GET',
       signal: controller.signal,
       headers: {
         'Content-Type': 'application/json'
@@ -44,9 +69,7 @@ export default async function handler(req, res) {
 
     const json = await response.json().catch(() => ({}));
 
-    // Attach latency header & metadata
-    res.setHeader('X-Ollama-Latency-Ms', latencyMs.toString());
-    return res.status(response.status).json({
+    return sendJson(response.status, {
       ...json,
       _telemetry: {
         latencyMs,
@@ -55,12 +78,12 @@ export default async function handler(req, res) {
       }
     });
   } catch (err) {
-    return res.status(502).json({
+    return sendJson(502, {
       ok: false,
+      models: [],
       error: "Ollama Node Unreachable via Proxy",
       details: err.message,
-      target: targetNode,
-      tip: "When running from Vercel cloud, the browser client makes direct Tailscale requests or uses the local node server."
+      target: targetNode
     });
   }
 }

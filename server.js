@@ -30,8 +30,20 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 
-  const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
+  const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = parsedUrl.pathname;
+
+  // Decorate req for serverless compatibility
+  req.query = Object.fromEntries(parsedUrl.searchParams.entries());
+
+  res.status = (code) => {
+    res.statusCode = code;
+    return res;
+  };
+  res.json = (data) => {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify(data));
+  };
 
   // 1. API: /api/status
   if (pathname === '/api/status') {
@@ -39,26 +51,23 @@ const server = http.createServer(async (req, res) => {
       const { default: handler } = await import('./api/status.js');
       return handler(req, res);
     } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ error: err.message }));
+      return res.status(500).json({ error: err.message });
     }
   }
 
-  // 2. API: /api/proxy (Direct Proxy to Ollama Node without Mixed Content or CORS)
+  // 2. API: /api/proxy (Direct Proxy to Ollama Node)
   if (pathname === '/api/proxy') {
     try {
       const { default: handler } = await import('./api/proxy.js');
       return handler(req, res);
     } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ error: err.message }));
+      return res.status(500).json({ error: err.message });
     }
   }
 
   // 3. Static Files
   let filePath = path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname);
 
-  // Security check: prevent directory traversal
   if (!filePath.startsWith(PUBLIC_DIR)) {
     res.writeHead(403);
     return res.end('Forbidden');
@@ -85,5 +94,5 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`🚀 Antigravity Real-Time Dashboard rodando em: http://localhost:${PORT}`);
-  console.log(`📡 Conectado ao Nó 1 (RTX 3080): http://100.79.145.95:11434`);
+  console.log(`📡 Conectado à RTX 3080: http://100.79.145.95:11434`);
 });

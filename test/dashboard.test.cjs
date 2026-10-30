@@ -1,4 +1,4 @@
-// Automated Test Suite for Antigravity Cluster Dashboard
+// Automated Test Suite for Antigravity Cluster Dashboard (Primary PC Mode)
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -10,6 +10,7 @@ console.log('🧪 Iniciando Testes Automatizados da Dashboard...');
 // Teste 1: Existência de arquivos críticos
 const requiredFiles = [
   'package.json',
+  'server.js',
   'vercel.json',
   'public/index.html',
   'api/status.js',
@@ -43,8 +44,8 @@ console.log('  ✓ vercel.json estruturado e válido');
 const html = fs.readFileSync(path.join(ROOT_DIR, 'public', 'index.html'), 'utf-8');
 assert.ok(html.includes('ANTIGRAVITY'), 'Título ausente no HTML');
 assert.ok(html.includes('100.79.145.95'), 'IP do Nó 1 ausente no HTML');
-assert.ok(html.includes('100.65.93.99'), 'IP do Nó 2 ausente no HTML');
-console.log('  ✓ Frontend index.html contém referências da topologia');
+assert.ok(html.includes('RTX 3080'), 'Menção à RTX 3080 ausente no HTML');
+console.log('  ✓ Frontend index.html focado 100% no PC Principal (RTX 3080)');
 
 console.log('🎉 Todos os testes passaram com sucesso (0 erros de compilação)!');
 process.exit(0);
