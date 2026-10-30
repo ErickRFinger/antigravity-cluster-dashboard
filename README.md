@@ -77,6 +77,14 @@ Consulte o arquivo `.env.example`:
 
 ## 6. Histórico de Evolução & Decisões Técnicas
 
+- **v1.1.0 (2026-10-30):**
+  - Implementação de **Telemetria Reativa em Tempo Real** com batimento configurável (2s turbo, 3s padrão, 5s eco ou pausado).
+  - Barra de progresso contínua a 60fps no topo da interface sinalizando a contagem até o próximo pulso.
+  - Sparkline dinâmico dos últimos 15 testes de latência RTT via Tailscale.
+  - Monitoramento ao vivo de VRAM com detecção automática do estado IDLE (placa fria) vs RUNNING (com alocação em GB e offload GPU/CPU).
+  - Botões de ação rápida para Aquecer Modelo e Liberar VRAM (`keep_alive: 0`) com atualização visual imediata.
+  - Servidor Node nativo com zero dependências (`node server.js`) para execução local fluida.
+
 - **v1.0.0 (2026-10-30):**
   - Integração do Mac com o PC 1 via Tailscale (`100.79.145.95`).
   - Criação do alias `pc-ia` em `~/.ssh/config`.

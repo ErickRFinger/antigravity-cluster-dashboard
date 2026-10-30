@@ -1,4 +1,4 @@
-// Vercel Serverless Function - Ollama Proxy / Relay with CORS
+// Vercel Serverless Function & Local Proxy Helper - Real-Time Ollama Relay
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -8,16 +8,18 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const targetUrl = req.query.url || req.headers['x-target-node'] || 'http://100.79.145.95:11434';
-  const path = req.query.path || '/api/tags';
+  const targetNode = req.query.url || req.headers['x-target-node'] || 'http://100.79.145.95:11434';
+  const apiPath = req.query.path || '/api/ps';
 
   try {
-    const fetchUrl = `${targetUrl.replace(/\/+$/, '')}${path.startsWith('/') ? path : '/' + path}`;
+    const cleanBase = targetNode.replace(/\/+$/, '');
+    const cleanPath = apiPath.startsWith('/') ? apiPath : `/${apiPath}`;
+    const destinationUrl = `${cleanBase}${cleanPath}`;
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    const timeout = setTimeout(() => controller.abort(), 15000);
 
-    const fetchOptions = {
+    const options = {
       method: req.method,
       signal: controller.signal,
       headers: {
@@ -25,21 +27,40 @@ export default async function handler(req, res) {
       }
     };
 
-    if (req.method === 'POST' && req.body) {
-      fetchOptions.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    if (req.method === 'POST') {
+      let bodyData = req.body;
+      if (typeof bodyData === 'object') {
+        bodyData = JSON.stringify(bodyData);
+      }
+      if (bodyData) {
+        options.body = bodyData;
+      }
     }
 
-    const response = await fetch(fetchUrl, fetchOptions);
+    const start = performance.now();
+    const response = await fetch(destinationUrl, options);
+    const latencyMs = Math.round(performance.now() - start);
     clearTimeout(timeout);
 
-    const data = await response.json().catch(() => ({}));
-    return res.status(response.status).json(data);
+    const json = await response.json().catch(() => ({}));
+
+    // Attach latency header & metadata
+    res.setHeader('X-Ollama-Latency-Ms', latencyMs.toString());
+    return res.status(response.status).json({
+      ...json,
+      _telemetry: {
+        latencyMs,
+        queriedAt: new Date().toISOString(),
+        node: cleanBase
+      }
+    });
   } catch (err) {
     return res.status(502).json({
       ok: false,
-      error: "Ollama Proxy Unreachable",
+      error: "Ollama Node Unreachable via Proxy",
       details: err.message,
-      tip: "If accessing through Vercel cloud, ensure your browser device is connected to Tailscale and using Direct Client Mode."
+      target: targetNode,
+      tip: "When running from Vercel cloud, the browser client makes direct Tailscale requests or uses the local node server."
     });
   }
 }

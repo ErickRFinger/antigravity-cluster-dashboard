@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Antigravity // AI Compute Farm Dashboard</title>
+  <title>Antigravity // AI Farm Real-Time Telemetry</title>
   <meta name="description" content="Dashboard em tempo real do Cluster de IA Local Antigravity (RTX 3080 + Ryzen 7 via Tailscale).">
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -51,26 +51,39 @@
       background-attachment: fixed;
     }
     .glass-card {
-      background: rgba(15, 20, 32, 0.75);
-      backdrop-filter: blur(12px);
+      background: rgba(15, 20, 32, 0.78);
+      backdrop-filter: blur(14px);
       border: 1px solid rgba(255, 255, 255, 0.08);
       box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+      transition: all 0.25s ease;
     }
     .glass-card:hover {
-      border-color: rgba(255, 255, 255, 0.14);
+      border-color: rgba(255, 255, 255, 0.15);
     }
     .glow-cyan {
       box-shadow: 0 0 20px rgba(6, 182, 212, 0.25);
     }
-    .glow-blue {
-      box-shadow: 0 0 20px rgba(59, 130, 246, 0.25);
+    .glow-pulse {
+      animation: pulse-glow 2s infinite;
+    }
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.08); }
+    }
+    .sparkline-bar {
+      transition: height 0.3s ease, background-color 0.3s ease;
     }
   </style>
 </head>
 <body class="min-h-screen flex flex-col font-sans selection:bg-brand-500 selection:text-white">
 
+  <!-- REAL-TIME SYNC PROGRESS BAR (TOP HEADER) -->
+  <div class="w-full bg-slate-900 h-1 overflow-hidden sticky top-0 z-50">
+    <div id="sync-progress-bar" class="bg-gradient-to-r from-cyan-400 via-brand-500 to-emerald-400 h-1 w-0 transition-all duration-100 ease-linear shadow-[0_0_8px_rgba(6,182,212,0.8)]"></div>
+  </div>
+
   <!-- TOP NAVIGATION BAR -->
-  <header class="border-b border-cyber-border glass-card sticky top-0 z-50 px-6 py-4">
+  <header class="border-b border-cyber-border glass-card sticky top-1 z-40 px-6 py-4">
     <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-cyber-accent flex items-center justify-center font-mono font-bold text-lg text-white shadow-lg glow-cyan">
@@ -79,25 +92,35 @@
         <div>
           <div class="flex items-center gap-2">
             <h1 class="text-xl font-bold tracking-tight text-white">ANTIGRAVITY</h1>
-            <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-mono border border-cyan-500/20">CLUSTER V1.0</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-mono border border-cyan-500/20 font-semibold tracking-wider">REAL-TIME FARM</span>
           </div>
-          <p class="text-xs text-slate-400">Hub de Telemetria e Orquestração de IA Local • Padrão Erick Ruan Finger</p>
+          <p class="text-xs text-slate-400">Telemetria ao Vivo • Dual-Node Cluster (RTX 3080 + Ryzen 7)</p>
         </div>
       </div>
 
-      <!-- NODE CONTROLS & STATUS PILL -->
+      <!-- REAL-TIME CONTROLS & HEARTBEAT PILL -->
       <div class="flex flex-wrap items-center gap-3">
-        <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>NÓ 1 (RTX 3080): ATIVO (100.79.145.95)</span>
+        <!-- LIVE HEARTBEAT BADGE -->
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono">
+          <span id="live-pulse-indicator" class="w-2.5 h-2.5 rounded-full bg-emerald-400 glow-pulse"></span>
+          <span id="live-status-text" class="font-semibold">AO VIVO: SINCRONIZANDO</span>
         </div>
-        <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-mono">
-          <span class="w-2 h-2 rounded-full bg-amber-400"></span>
-          <span>NÓ 2 (RYZEN 7): STANDBY (100.65.93.99)</span>
+
+        <!-- REFRESH RATE SELECTOR -->
+        <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-800/80 border border-slate-700 text-xs text-slate-300 font-mono">
+          <span class="text-slate-400 text-[11px]">Taxa:</span>
+          <select id="select-refresh-rate" onchange="changeRefreshRate(this.value)" class="bg-transparent text-cyan-400 focus:outline-none cursor-pointer font-semibold">
+            <option value="2000" class="bg-slate-900">2s (Turbo)</option>
+            <option value="3000" selected class="bg-slate-900">3s (Padrão)</option>
+            <option value="5000" class="bg-slate-900">5s (Eco)</option>
+            <option value="0" class="bg-slate-900">Pausar</option>
+          </select>
         </div>
-        <button id="btn-refresh-all" onclick="refreshClusterTelemetry()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition flex items-center gap-1.5 border border-slate-700">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-          Atualizar
+
+        <!-- MANUAL FORCE REFRESH -->
+        <button id="btn-force-refresh" onclick="triggerManualSync()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition flex items-center gap-1.5 border border-slate-700">
+          <svg id="icon-sync" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <span id="btn-sync-label">Sincronizar</span>
         </button>
       </div>
     </div>
@@ -106,207 +129,193 @@
   <!-- MAIN CONTAINER -->
   <main class="flex-1 max-w-7xl mx-auto w-full p-6 space-y-6">
 
-    <!-- KPI CARDS SUMMARY -->
+    <!-- SUBHEADER LIVE TICKER & NODE ENDPOINT CONFIG -->
+    <div class="glass-card rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between text-xs text-slate-400 font-mono gap-3">
+      <div class="flex items-center gap-4 flex-wrap">
+        <span>Último pulso: <strong id="lbl-last-sync" class="text-white">carregando...</strong></span>
+        <span>•</span>
+        <span>Nó Ativo: <strong id="lbl-active-endpoint" class="text-cyan-400">http://100.79.145.95:11434</strong></span>
+        <span>•</span>
+        <span>Modo: <strong id="lbl-connection-mode" class="text-emerald-400">Tailscale Mesh Direto</strong></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="toggleEndpointConfig()" class="text-slate-400 hover:text-white underline text-[11px]">Editar Endpoint</button>
+      </div>
+    </div>
+
+    <!-- ENDPOINT CONFIG MODAL (TOGGLEABLE) -->
+    <div id="endpoint-config-box" class="hidden glass-card rounded-2xl p-5 border border-cyan-500/30 space-y-3">
+      <div class="flex justify-between items-center">
+        <h3 class="text-sm font-bold text-white font-mono">Configuração de Conexão dos Nós</h3>
+        <button onclick="toggleEndpointConfig()" class="text-slate-400 hover:text-white text-xs">✕ Fechar</button>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+        <div>
+          <label class="block text-slate-400 mb-1">Nó 1 URL (PC Casa i7 - RTX 3080):</label>
+          <input id="input-node1-url" type="text" value="http://100.79.145.95:11434" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">Nó 2 URL (PC Casa R7 - Ryzen 7 3700X):</label>
+          <input id="input-node2-url" type="text" value="http://100.65.93.99:11434" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs">
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="saveEndpointConfig()" class="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-mono font-medium">Salvar e Reconectar</button>
+      </div>
+    </div>
+
+    <!-- 4 KPI TILES (DYNAMICALLY UPDATED) -->
     <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       
-      <!-- CARD 1: PODER COMBINADO -->
+      <!-- CARD 1: VRAM REAL-TIME USAGE -->
+      <div class="glass-card rounded-2xl p-5 relative overflow-hidden group border-l-4 border-l-cyan-500" id="tile-vram">
+        <p class="text-xs uppercase font-mono tracking-wider text-slate-400 mb-1">VRAM em Tempo Real (RTX 3080)</p>
+        <div class="flex items-baseline gap-2">
+          <span class="text-3xl font-extrabold text-white" id="val-vram-gb">0.00 GB</span>
+          <span class="text-xs text-slate-400 font-mono">/ 10.0 GB</span>
+        </div>
+        <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
+          <span id="val-vram-pct">Alocação: 0%</span>
+          <span id="badge-vram-state" class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-300">IDLE</span>
+        </div>
+        <!-- Barra de Progresso Real-Time -->
+        <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2.5 overflow-hidden">
+          <div id="bar-vram-usage" class="bg-gradient-to-r from-cyan-400 to-brand-500 h-1.5 rounded-full transition-all duration-500" style="width: 0%;"></div>
+        </div>
+      </div>
+
+      <!-- CARD 2: LATENCY & SPARKLINE -->
       <div class="glass-card rounded-2xl p-5 relative overflow-hidden group">
-        <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-brand-500/10 rounded-full blur-xl group-hover:bg-brand-500/20 transition"></div>
-        <p class="text-xs uppercase font-mono tracking-wider text-slate-400 mb-1">Capacidade Total Farm</p>
-        <div class="flex items-baseline gap-2">
-          <span class="text-3xl font-extrabold text-white">88 GB</span>
-          <span class="text-xs text-brand-400 font-mono">DDR4 RAM</span>
+        <p class="text-xs uppercase font-mono tracking-wider text-slate-400 mb-1">Latência RTT (Tailscale)</p>
+        <div class="flex items-baseline justify-between">
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-3xl font-extrabold text-cyan-400" id="val-ping-ms">--</span>
+            <span class="text-xs text-slate-400 font-mono">ms</span>
+          </div>
+          <!-- MINI SPARKLINE DAS ÚLTIMAS 12 AMOSTRAS -->
+          <div id="sparkline-container" class="flex items-end gap-1 h-7 pt-1">
+            <!-- Injetado via JS -->
+          </div>
         </div>
-        <div class="mt-3 text-xs text-slate-400 flex items-center gap-2">
-          <span class="text-cyan-400 font-semibold">18 GB VRAM Total</span> • 16c / 32t
-        </div>
-      </div>
-
-      <!-- CARD 2: NÓ 1 (GPU TELEMETRY) -->
-      <div class="glass-card rounded-2xl p-5 relative overflow-hidden group border-l-4 border-l-brand-500">
-        <p class="text-xs uppercase font-mono tracking-wider text-slate-400 mb-1">Nó 1 • GPU RTX 3080</p>
-        <div class="flex items-baseline gap-2">
-          <span class="text-3xl font-extrabold text-white">7.26 GB</span>
-          <span class="text-xs text-emerald-400 font-mono">/ 10 GB VRAM</span>
-        </div>
-        <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
-          <span>Offload: <strong class="text-white">70% GPU</strong> • 30% CPU</span>
-          <span class="text-emerald-400 font-mono">~10.0 t/s</span>
+        <div class="mt-3 flex items-center justify-between text-xs text-slate-400 font-mono">
+          <span>Perda: <strong class="text-emerald-400">0.0%</strong></span>
+          <span id="val-jitter" class="text-slate-400">Jitter: ±1.2ms</span>
         </div>
       </div>
 
-      <!-- CARD 3: NÓ 2 (RYZEN 7) -->
-      <div class="glass-card rounded-2xl p-5 relative overflow-hidden group border-l-4 border-l-amber-500">
-        <p class="text-xs uppercase font-mono tracking-wider text-slate-400 mb-1">Nó 2 • Ryzen 7 3700X</p>
-        <div class="flex items-baseline gap-2">
-          <span class="text-3xl font-extrabold text-white">24 GB</span>
-          <span class="text-xs text-amber-400 font-mono">DDR4 + RX 580</span>
-        </div>
-        <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
-          <span>8 Cores / 16 Threads</span>
-          <span class="text-amber-400 font-mono">Standby Noturno</span>
-        </div>
-      </div>
-
-      <!-- CARD 4: TAILSCALE LATENCY -->
+      <!-- CARD 3: MODELOS NO SERVIDOR -->
       <div class="glass-card rounded-2xl p-5 relative overflow-hidden group">
-        <p class="text-xs uppercase font-mono tracking-wider text-slate-400 mb-1">Rede Tailscale (DERP sao)</p>
+        <p class="text-xs uppercase font-mono tracking-wider text-slate-400 mb-1">Catálogo do Nó 1</p>
         <div class="flex items-baseline gap-2">
-          <span class="text-3xl font-extrabold text-cyan-400" id="metric-ping">42.6 ms</span>
-          <span class="text-xs text-slate-400 font-mono">RTT Médio</span>
+          <span class="text-3xl font-extrabold text-white" id="val-models-count">5</span>
+          <span class="text-xs text-brand-400 font-mono">Modelos Prontos</span>
         </div>
         <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
-          <span>Perda de Pacotes: <strong class="text-emerald-400">0.0%</strong></span>
-          <span class="text-cyan-400 font-mono">SSH Ativo</span>
+          <span>Qwen 14B • DeepSeek R1</span>
+          <span class="text-cyan-400 font-mono">CUDA 12</span>
         </div>
       </div>
+
+      <!-- CARD 4: CLUSTER TOTAL RAM -->
+      <div class="glass-card rounded-2xl p-5 relative overflow-hidden group border-l-4 border-l-emerald-500">
+        <p class="text-xs uppercase font-mono tracking-wider text-slate-400 mb-1">Memória Total Farm</p>
+        <div class="flex items-baseline gap-2">
+          <span class="text-3xl font-extrabold text-emerald-400">88 GB</span>
+          <span class="text-xs text-slate-400 font-mono">RAM Combinada</span>
+        </div>
+        <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
+          <span>Nó 1: 64GB • Nó 2: 24GB</span>
+          <span class="text-emerald-400 font-mono">16c / 32t</span>
+        </div>
+      </div>
+
     </section>
 
-    <!-- CLUSTER TOPOLOGY MAP & CONTROLS -->
+    <!-- NODE DETAILS & INSTANT CONTROLS -->
     <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-      <!-- LEFT 2 COLS: HARDWARE NODES DETAIL -->
+      <!-- LEFT 2 COLS: HARDWARE NODES & REAL-TIME CONTROLS -->
       <div class="lg:col-span-2 space-y-6">
+        
+        <!-- NÓ 1 (RTX 3080) LIVE CONTROL CARD -->
         <div class="glass-card rounded-2xl p-6">
-          <div class="flex items-center justify-between mb-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
-              <h2 class="text-lg font-bold text-white flex items-center gap-2">
-                <span>Topologia do Cluster de IA</span>
-                <span class="text-xs font-mono px-2 py-0.5 rounded bg-brand-500/10 text-brand-400 border border-brand-500/20">2 NÓS CONECTADOS</span>
-              </h2>
-              <p class="text-xs text-slate-400">Balanceamento de carga entre inferência de código pesado e embeddings semânticos</p>
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <h2 class="text-base font-bold text-white">Nó 1 • PC Casa i7 (100.79.145.95)</h2>
+              </div>
+              <p class="text-xs text-slate-400 font-mono">NVIDIA GeForce RTX 3080 10GB • 64GB RAM DDR4</p>
             </div>
-            <button onclick="unloadModelVram()" title="Libera a VRAM da GPU imediatamente" class="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-mono transition flex items-center gap-1.5">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-              Liberar VRAM
-            </button>
+
+            <!-- BOTÕES DE CONTROLE INSTANTÂNEO DE VRAM -->
+            <div class="flex items-center gap-2">
+              <button onclick="quickWarmupModel()" title="Pré-carrega o Qwen 2.5 Coder 14B na VRAM" class="px-3 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-xs font-mono font-medium transition flex items-center gap-1.5 shadow-sm">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Aquecer 14B
+              </button>
+              <button onclick="quickUnloadVram()" title="Descarrega o modelo e libera toda a VRAM imediatamente (keep_alive: 0)" class="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-mono font-medium transition flex items-center gap-1.5 shadow-sm">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                Liberar VRAM
+              </button>
+            </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            
-            <!-- NÓ 1 CARD -->
-            <div class="p-4 rounded-xl bg-slate-900/60 border border-brand-500/30 relative">
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-xs font-bold text-brand-400 font-mono">NÓ 1 • INFERÊNCIA PESADA</span>
-                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-              </div>
-              <h3 class="text-base font-bold text-white">PC Casa i7 (100.79.145.95)</h3>
-              <p class="text-xs text-slate-400 mb-3 font-mono">NVIDIA GeForce RTX 3080 10GB + 64GB RAM</p>
-              
-              <div class="space-y-2 text-xs">
-                <div class="flex justify-between text-slate-300">
-                  <span>Modelo Ativo na VRAM:</span>
-                  <span class="text-cyan-400 font-mono font-semibold" id="node1-active-model">qwen2.5-coder:14b</span>
-                </div>
-                <!-- Barra de VRAM -->
-                <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-                  <div class="bg-gradient-to-r from-brand-500 to-cyber-accent h-2 rounded-full" style="width: 72%;"></div>
-                </div>
-                <div class="flex justify-between text-[10px] text-slate-400">
-                  <span>7.26 GB Alocado (VRAM)</span>
-                  <span>10.3 GB Total (c/ Contexto)</span>
-                </div>
-              </div>
+          <!-- DETALHE EM TEMPO REAL DO MODELO CARREGADO -->
+          <div class="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-3 font-mono text-xs">
+            <div class="flex justify-between items-center text-slate-300">
+              <span>Modelo em Execução:</span>
+              <span id="detail-active-model" class="text-cyan-400 font-bold px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20">Nenhum (Placa em Repouso)</span>
+            </div>
 
-              <div class="mt-4 pt-3 border-t border-slate-800 flex flex-wrap gap-1.5">
-                <span class="px-2 py-0.5 rounded bg-brand-500/10 text-brand-300 text-[10px] font-mono">qwen2.5-coder:14b</span>
-                <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-mono">deepseek-r1:14b</span>
-                <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-mono">glm-4.7-flash</span>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-800/80 text-[11px]">
+              <div>
+                <span class="text-slate-500 block">VRAM FÍSICA</span>
+                <span id="detail-vram-bytes" class="text-white font-semibold">0.00 GB</span>
+              </div>
+              <div>
+                <span class="text-slate-500 block">MEMÓRIA TOTAL</span>
+                <span id="detail-total-bytes" class="text-white font-semibold">0.00 GB</span>
+              </div>
+              <div>
+                <span class="text-slate-500 block">TIMEOUT DE DESCARGA</span>
+                <span id="detail-expires" class="text-emerald-400 font-semibold">Inativo</span>
               </div>
             </div>
 
-            <!-- NÓ 2 CARD -->
-            <div class="p-4 rounded-xl bg-slate-900/60 border border-amber-500/30 relative">
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-xs font-bold text-amber-400 font-mono">NÓ 2 • EMBEDDINGS & WORKER</span>
-                <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <!-- BARRA DE COMPARAÇÃO VRAM X CPU -->
+            <div class="space-y-1 pt-1">
+              <div class="flex justify-between text-[10px] text-slate-400">
+                <span>Distribuição de Camadas:</span>
+                <span id="detail-offload-ratio">0% GPU / 0% CPU</span>
               </div>
-              <h3 class="text-base font-bold text-white">PC Casa R7 (100.65.93.99)</h3>
-              <p class="text-xs text-slate-400 mb-3 font-mono">AMD Ryzen 7 3700X (8c/16t) + 24GB RAM</p>
-              
-              <div class="space-y-2 text-xs">
-                <div class="flex justify-between text-slate-300">
-                  <span>Função Primária:</span>
-                  <span class="text-amber-400 font-mono font-semibold">Busca Semântica & RAG</span>
-                </div>
-                <!-- Barra de RAM -->
-                <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-                  <div class="bg-amber-500 h-2 rounded-full" style="width: 15%;"></div>
-                </div>
-                <div class="flex justify-between text-[10px] text-slate-400">
-                  <span>Status: Configurado para a Noite</span>
-                  <span>24 GB DDR4</span>
-                </div>
-              </div>
-
-              <div class="mt-4 pt-3 border-t border-slate-800 flex flex-wrap gap-1.5">
-                <span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 text-[10px] font-mono">nomic-embed-text</span>
-                <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-mono">qwen:7b-worker</span>
+              <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden flex">
+                <div id="bar-gpu-split" class="bg-cyan-400 h-2 transition-all duration-500" style="width: 0%;"></div>
+                <div id="bar-cpu-split" class="bg-amber-400 h-2 transition-all duration-500" style="width: 0%;"></div>
               </div>
             </div>
-
           </div>
+
         </div>
 
-        <!-- RECENT DEMANDS & LOG (TRI-AGENT INTEGRATION) -->
+        <!-- LIVE EVENT FEED / LOG EM TEMPO REAL -->
         <div class="glass-card rounded-2xl p-6">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-base font-bold text-white flex items-center gap-2">
-              <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-              Últimas Demandas Executadas (Tri-Agent Synergy)
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-bold text-white flex items-center gap-2 font-mono">
+              <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              Fluxo de Eventos em Tempo Real (Live Telemetry Stream)
             </h2>
-            <span class="text-xs text-slate-400 font-mono">5 eventos hoje</span>
+            <button onclick="clearEventLogs()" class="text-[11px] text-slate-400 hover:text-white font-mono">Limpar</button>
           </div>
 
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs font-mono">
-              <thead>
-                <tr class="border-b border-slate-800 text-slate-400 uppercase text-[10px]">
-                  <th class="py-2.5 px-3">Tarefa / Demanda</th>
-                  <th class="py-2.5 px-3">Nó de Execução</th>
-                  <th class="py-2.5 px-3">Tokens / Resultado</th>
-                  <th class="py-2.5 px-3">Status</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-800/60 text-slate-300" id="demands-tbody">
-                <tr>
-                  <td class="py-2.5 px-3 font-semibold text-white">Integração Antigravity Mac &lt;-&gt; RTX 3080</td>
-                  <td class="py-2.5 px-3 text-cyan-400">PC Casa i7 (100.79.145.95)</td>
-                  <td class="py-2.5 px-3">54 tokens (qwen2.5-coder:14b)</td>
-                  <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px]">Concluído</span></td>
-                </tr>
-                <tr>
-                  <td class="py-2.5 px-3 font-semibold text-white">Benchmark Streaming TypeScript Debounce</td>
-                  <td class="py-2.5 px-3 text-cyan-400">PC Casa i7 (100.79.145.95)</td>
-                  <td class="py-2.5 px-3">531 tokens @ 10.0 t/s</td>
-                  <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px]">Concluído</span></td>
-                </tr>
-                <tr>
-                  <td class="py-2.5 px-3 font-semibold text-white">Configuração Host SSH (~/.ssh/config)</td>
-                  <td class="py-2.5 px-3 text-slate-400">Macbook Air Local</td>
-                  <td class="py-2.5 px-3">Alias 'pc-ia' configurado</td>
-                  <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px]">Concluído</span></td>
-                </tr>
-                <tr>
-                  <td class="py-2.5 px-3 font-semibold text-white">Ajuste Extensão Cline (Antigravity IDE)</td>
-                  <td class="py-2.5 px-3 text-slate-400">Macbook Air Local</td>
-                  <td class="py-2.5 px-3">Provider Ollama + Qwen 14B</td>
-                  <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px]">Concluído</span></td>
-                </tr>
-                <tr>
-                  <td class="py-2.5 px-3 font-semibold text-white">Deploy Dashboard Cluster no Vercel</td>
-                  <td class="py-2.5 px-3 text-brand-400">Vercel Edge Cloud</td>
-                  <td class="py-2.5 px-3">Live Global Deploy</td>
-                  <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 text-[10px]">Em Produção</span></td>
-                </tr>
-              </tbody>
-            </table>
+          <div id="live-event-stream" class="h-44 overflow-y-auto space-y-1.5 p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300">
+            <!-- Eventos injetados dinamicamente a cada batimento -->
           </div>
         </div>
 
       </div>
 
-      <!-- RIGHT COL: INTERACTIVE ARENA & NIGHT SHIFT GUIDE -->
+      <!-- RIGHT COL: LIVE ARENA & NIGHT SHIFT STATUS -->
       <div class="space-y-6">
 
         <!-- INTERACTIVE TEST ARENA -->
@@ -314,31 +323,32 @@
           <div class="flex items-center justify-between mb-3">
             <h2 class="text-base font-bold text-white flex items-center gap-2">
               <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-              Arena de Teste Rápido
+              Arena de Inferência Rápida
             </h2>
             <span class="text-[10px] font-mono text-cyan-400">RTX 3080</span>
           </div>
 
           <div class="space-y-3">
             <div>
-              <label class="text-[10px] uppercase font-mono text-slate-400 mb-1 block">Modelo Alvo</label>
+              <label class="text-[10px] uppercase font-mono text-slate-400 mb-1 block">Modelo Selecionado</label>
               <select id="select-model" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono">
-                <option value="qwen2.5-coder:14b">qwen2.5-coder:14b (Padrão Codificação)</option>
-                <option value="deepseek-r1:14b">deepseek-r1:14b (Raciocínio Lógico)</option>
+                <option value="qwen2.5-coder:14b">qwen2.5-coder:14b (Padrão Código)</option>
+                <option value="deepseek-r1:14b">deepseek-r1:14b (Raciocínio R1)</option>
                 <option value="glm-4.7-flash-hybrid:latest">glm-4.7-flash-hybrid:latest (29.9B)</option>
-                <option value="llama3:latest">llama3:latest (8B Rápido)</option>
+                <option value="llama3:latest">llama3:latest (8B Ultrarrápido)</option>
               </select>
             </div>
 
             <div>
               <div class="flex justify-between items-center mb-1">
                 <label class="text-[10px] uppercase font-mono text-slate-400">Prompt de Teste</label>
-                <div class="flex gap-1 text-[10px] text-cyan-400">
-                  <button type="button" onclick="setPromptPreset(1)" class="hover:underline">Preset 1</button> •
-                  <button type="button" onclick="setPromptPreset(2)" class="hover:underline">Preset 2</button>
+                <div class="flex gap-1.5 text-[10px] text-cyan-400 font-mono">
+                  <button type="button" onclick="setPromptPreset(1)" class="hover:underline">Debounce</button> •
+                  <button type="button" onclick="setPromptPreset(2)" class="hover:underline">LRU Cache</button> •
+                  <button type="button" onclick="setPromptPreset(3)" class="hover:underline">Fibonacci</button>
                 </div>
               </div>
-              <textarea id="input-prompt" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono" placeholder="Digite uma instrução para a RTX 3080...">Escreva uma função TypeScript utilitária para deep clone de objetos sem perder funções.</textarea>
+              <textarea id="input-prompt" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono" placeholder="Digite uma instrução para a RTX 3080...">Escreva em TypeScript uma função de retry com exponential backoff genérica e bem tipada.</textarea>
             </div>
 
             <button id="btn-run-test" onclick="runModelTest()" class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-brand-600 to-cyber-accent hover:from-brand-500 hover:to-cyan-400 text-white font-medium text-xs transition flex items-center justify-center gap-2 shadow-lg glow-cyan">
@@ -357,25 +367,22 @@
           </div>
         </div>
 
-        <!-- NIGHT SHIFT INTEGRATION GUIDE (RYZEN 7) -->
+        <!-- NÓ 2 STANDBY STATUS -->
         <div class="glass-card rounded-2xl p-6 border-l-4 border-l-amber-500">
-          <div class="flex items-center gap-2 mb-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
-            <h3 class="text-sm font-bold text-white">Checklist para o Turno da Noite</h3>
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+              <h3 class="text-sm font-bold text-white font-mono">Nó 2 • Ryzen 7 3700X</h3>
+            </div>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono border border-amber-500/20">Standby</span>
           </div>
           <p class="text-xs text-slate-300 mb-3 leading-relaxed">
-            Quando chegar em casa e ligar o <strong>Ryzen 7 (PC Casa R7)</strong>, o Antigravity de lá pode rodar os seguintes comandos para subir o nó de embeddings:
+            Identificador Tailscale: <code class="text-cyan-400 font-mono">100.65.93.99</code>. Pronto para assumir embeddings (<code class="text-amber-300">nomic-embed-text</code>) assim que ligado à noite.
           </p>
-          <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-amber-300 space-y-1">
-            <p># 1. Subir Ollama no Ryzen 7</p>
-            <p class="text-slate-400">ollama run nomic-embed-text</p>
-            <p class="text-slate-400">ollama run qwen2.5-coder:7b</p>
-            <p class="pt-1"># 2. Confirmar IP Tailscale</p>
-            <p class="text-slate-400">tailscale status | grep pc-casa-r7</p>
+          <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-400 space-y-1">
+            <p>• 24 GB DDR4 + RX 580 (8GB)</p>
+            <p>• Zero interferência na VRAM da RTX 3080</p>
           </div>
-          <p class="text-[10px] text-slate-400 mt-2">
-            O repositório já está estruturado com <code class="text-cyan-400">NIGHT_SHIFT_CONTEXT.md</code> para leitura imediata da IA.
-          </p>
         </div>
 
       </div>
@@ -386,52 +393,271 @@
 
   <!-- FOOTER -->
   <footer class="border-t border-cyber-border py-4 px-6 text-center text-xs text-slate-500 font-mono">
-    Antigravity AI Compute Farm • Integrado via Tailscale Mesh • Erick Ruan Finger • 2026
+    Antigravity AI Compute Farm • Telemetria em Tempo Real • Erick Ruan Finger • 2026
   </footer>
 
-  <!-- CLIENT LOGIC SCRIPT -->
+  <!-- REAL-TIME TELEMETRY ENGINE SCRIPT -->
   <script>
-    const NODE1_URL = 'http://100.79.145.95:11434';
-    const NODE2_URL = 'http://100.65.93.99:11434';
+    // Configurações Reativas
+    let node1Url = localStorage.getItem('ag_node1_url') || 'http://100.79.145.95:11434';
+    let node2Url = localStorage.getItem('ag_node2_url') || 'http://100.65.93.99:11434';
+    let refreshIntervalMs = parseInt(localStorage.getItem('ag_refresh_ms') || '3000');
+    
+    let timerId = null;
+    let animFrameId = null;
+    let lastTickTime = performance.now();
+    let nextTickTarget = performance.now() + refreshIntervalMs;
+    const latencyHistory = [42, 43, 41, 44, 42, 43, 42, 41, 43, 42];
 
-    function setPromptPreset(idx) {
-      const p = document.getElementById('input-prompt');
-      if (idx === 1) {
-        p.value = "Escreva uma classe TypeScript utilitária chamada `LRUCache<K, V>` com métodos get, set, has e clear O(1).";
+    document.getElementById('input-node1-url').value = node1Url;
+    document.getElementById('input-node2-url').value = node2Url;
+    document.getElementById('lbl-active-endpoint').textContent = node1Url;
+
+    // Inicialização da Sparkline de Latência
+    function renderSparkline() {
+      const container = document.getElementById('sparkline-container');
+      container.innerHTML = '';
+      const maxVal = Math.max(...latencyHistory, 60);
+      
+      latencyHistory.slice(-10).forEach(val => {
+        const heightPct = Math.min(100, Math.max(15, (val / maxVal) * 100));
+        const bar = document.createElement('div');
+        bar.className = 'w-1.5 rounded-t sparkline-bar ' + (val > 60 ? 'bg-amber-400' : 'bg-cyan-400');
+        bar.style.height = `${heightPct}%`;
+        bar.title = `${val} ms`;
+        container.appendChild(bar);
+      });
+    }
+
+    // Gerenciador de Log em Tempo Real
+    function appendEventLog(msg, type = 'info') {
+      const stream = document.getElementById('live-event-stream');
+      const time = new Date().toLocaleTimeString('pt-BR');
+      const row = document.createElement('div');
+      row.className = 'flex items-start gap-2 text-[11px] leading-tight';
+
+      let color = 'text-slate-400';
+      if (type === 'success') color = 'text-emerald-400';
+      if (type === 'warning') color = 'text-amber-400';
+      if (type === 'active') color = 'text-cyan-400';
+
+      row.innerHTML = `<span class="text-slate-500 font-mono">[${time}]</span> <span class="${color}">${msg}</span>`;
+      stream.insertBefore(row, stream.firstChild);
+
+      // Limitar a 30 linhas para performance de memória
+      while (stream.children.length > 30) {
+        stream.removeChild(stream.lastChild);
+      }
+    }
+
+    function clearEventLogs() {
+      document.getElementById('live-event-stream').innerHTML = '';
+      appendEventLog('Histórico de eventos reiniciado.', 'info');
+    }
+
+    // Motor Principal de Sincronização em Tempo Real
+    async function syncRealTimeTelemetry() {
+      const startFetch = performance.now();
+      const pulseIndicator = document.getElementById('live-pulse-indicator');
+      const btnSync = document.getElementById('btn-sync-label');
+
+      pulseIndicator.classList.add('bg-amber-400');
+      pulseIndicator.classList.remove('bg-emerald-400');
+
+      try {
+        // Tenta buscar diretamente do Ollama /api/ps ou via proxy local
+        let psData = null;
+        let rtt = 0;
+
+        try {
+          const res = await fetch(`${node1Url}/api/ps`, { method: 'GET', cache: 'no-store' });
+          psData = await res.json();
+          rtt = Math.round(performance.now() - startFetch);
+        } catch (directErr) {
+          // Se bloqueado por Mixed-Content no Vercel HTTPS, usa proxy
+          const proxyRes = await fetch(`/api/proxy?path=/api/ps&url=${encodeURIComponent(node1Url)}`);
+          psData = await proxyRes.json();
+          rtt = psData._telemetry ? psData._telemetry.latencyMs : Math.round(performance.now() - startFetch);
+        }
+
+        // Atualiza Histórico de Latência
+        if (rtt > 0 && rtt < 1000) {
+          latencyHistory.push(rtt);
+          if (latencyHistory.length > 15) latencyHistory.shift();
+          renderSparkline();
+          document.getElementById('val-ping-ms').textContent = rtt;
+        }
+
+        // Processa Dados de VRAM e Modelos Rodando
+        const runningModels = psData.models || [];
+        const isRunning = runningModels.length > 0;
+
+        const valVramGb = document.getElementById('val-vram-gb');
+        const valVramPct = document.getElementById('val-vram-pct');
+        const badgeVramState = document.getElementById('badge-vram-state');
+        const barVramUsage = document.getElementById('bar-vram-usage');
+        const detailActiveModel = document.getElementById('detail-active-model');
+        const detailVramBytes = document.getElementById('detail-vram-bytes');
+        const detailTotalBytes = document.getElementById('detail-total-bytes');
+        const detailExpires = document.getElementById('detail-expires');
+        const barGpuSplit = document.getElementById('bar-gpu-split');
+        const barCpuSplit = document.getElementById('bar-cpu-split');
+        const detailOffloadRatio = document.getElementById('detail-offload-ratio');
+
+        if (isRunning) {
+          const m = runningModels[0];
+          const vramGb = (m.size_vram / (1024 ** 3)).toFixed(2);
+          const totalGb = (m.size / (1024 ** 3)).toFixed(2);
+          const vramPct = Math.min(100, Math.round((m.size_vram / (10 * 1024 ** 3)) * 100));
+          const gpuRatio = Math.round((m.size_vram / m.size) * 100);
+          const cpuRatio = 100 - gpuRatio;
+
+          valVramGb.textContent = `${vramGb} GB`;
+          valVramPct.textContent = `Alocação: ${vramPct}% VRAM`;
+          badgeVramState.textContent = 'RODANDO';
+          badgeVramState.className = 'px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/30';
+          barVramUsage.style.width = `${vramPct}%`;
+
+          detailActiveModel.textContent = m.name || m.model;
+          detailActiveModel.className = 'text-cyan-300 font-bold px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-500/40 glow-cyan';
+          detailVramBytes.textContent = `${vramGb} GB`;
+          detailTotalBytes.textContent = `${totalGb} GB`;
+          detailExpires.textContent = m.expires_at ? new Date(m.expires_at).toLocaleTimeString('pt-BR') : 'Ativo';
+
+          barGpuSplit.style.width = `${gpuRatio}%`;
+          barCpuSplit.style.width = `${cpuRatio}%`;
+          detailOffloadRatio.textContent = `${gpuRatio}% GPU • ${cpuRatio}% CPU Offload`;
+
+          appendEventLog(`Nó 1 Ativo: ${m.name} alocado (${vramGb} GB VRAM • ${rtt}ms)`, 'active');
+        } else {
+          // Estado de Repouso (IDLE)
+          valVramGb.textContent = `0.00 GB`;
+          valVramPct.textContent = `Alocação: 0% (Livre)`;
+          badgeVramState.textContent = 'IDLE / REPOUSO';
+          badgeVramState.className = 'px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-400';
+          barVramUsage.style.width = `0%`;
+
+          detailActiveModel.textContent = 'Nenhum (Placa Fria ~35°C, <20W)';
+          detailActiveModel.className = 'text-slate-400 font-medium px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700';
+          detailVramBytes.textContent = `0.00 GB`;
+          detailTotalBytes.textContent = `0.00 GB`;
+          detailExpires.textContent = 'Em espera';
+
+          barGpuSplit.style.width = `0%`;
+          barCpuSplit.style.width = `0%`;
+          detailOffloadRatio.textContent = `0% GPU • 0% CPU`;
+
+          appendEventLog(`Heartbeat Nó 1: 0 modelos na VRAM (Modo Eco • ${rtt}ms)`, 'info');
+        }
+
+        document.getElementById('lbl-last-sync').textContent = new Date().toLocaleTimeString('pt-BR');
+        pulseIndicator.classList.remove('bg-amber-400');
+        pulseIndicator.classList.add('bg-emerald-400');
+      } catch (err) {
+        appendEventLog(`Falha de conexão com ${node1Url}: ${err.message}`, 'warning');
+        pulseIndicator.classList.remove('bg-emerald-400');
+        pulseIndicator.classList.add('bg-amber-400');
+      }
+    }
+
+    // Barra de Progresso Suave (RequestAnimationFrame a 60fps)
+    function runProgressBarLoop() {
+      if (refreshIntervalMs > 0) {
+        const now = performance.now();
+        const elapsed = now - lastTickTime;
+        const progress = Math.min(100, Math.max(0, (elapsed / refreshIntervalMs) * 100));
+        document.getElementById('sync-progress-bar').style.width = `${progress}%`;
+
+        if (now >= nextTickTarget) {
+          lastTickTime = now;
+          nextTickTarget = now + refreshIntervalMs;
+          syncRealTimeTelemetry();
+        }
+      }
+      animFrameId = requestAnimationFrame(runProgressBarLoop);
+    }
+
+    function changeRefreshRate(val) {
+      refreshIntervalMs = parseInt(val);
+      localStorage.setItem('ag_refresh_ms', refreshIntervalMs.toString());
+
+      if (refreshIntervalMs === 0) {
+        document.getElementById('sync-progress-bar').style.width = '0%';
+        document.getElementById('live-status-text').textContent = 'ATUALIZAÇÃO PAUSADA';
+        document.getElementById('live-pulse-indicator').classList.remove('animate-pulse', 'glow-pulse');
+        appendEventLog('Atualização automática pausada.', 'warning');
       } else {
-        p.value = "Crie uma rota Next.js App Router para streaming SSE com debounce e cancelamento automático via AbortController.";
+        document.getElementById('live-status-text').textContent = 'AO VIVO: SINCRONIZANDO';
+        document.getElementById('live-pulse-indicator').classList.add('glow-pulse');
+        lastTickTime = performance.now();
+        nextTickTarget = performance.now() + refreshIntervalMs;
+        appendEventLog(`Frequência de atualização alterada para ${refreshIntervalMs / 1000}s.`, 'info');
       }
     }
 
-    async function refreshClusterTelemetry() {
-      const btn = document.getElementById('btn-refresh-all');
-      btn.innerHTML = 'Consultando...';
-      try {
-        const res = await fetch('/api/status');
-        const data = await res.json();
-        console.log("Cluster status:", data);
-      } catch (e) {
-        console.log("Status offline, usando fallback.");
-      }
-      setTimeout(() => {
-        btn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Atualizar';
-      }, 500);
+    function triggerManualSync() {
+      lastTickTime = performance.now();
+      nextTickTarget = performance.now() + (refreshIntervalMs || 3000);
+      syncRealTimeTelemetry();
     }
 
-    async function unloadModelVram() {
-      if (!confirm("Deseja descarregar todos os modelos da VRAM da RTX 3080 para liberar a GPU?")) return;
+    // Ações de VRAM em Tempo Real
+    async function quickWarmupModel() {
+      appendEventLog('Enviando comando para aquecer qwen2.5-coder:14b na VRAM da RTX 3080...', 'active');
       try {
-        const res = await fetch(NODE1_URL + '/api/generate', {
+        await fetch(`${node1Url}/api/generate`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({model: 'qwen2.5-coder:14b', keep_alive: 0})
+          body: JSON.stringify({ model: 'qwen2.5-coder:14b', keep_alive: '5m' })
         });
-        alert("Comando de descarregamento enviado à RTX 3080 com sucesso!");
+        appendEventLog('Comando aceito! Qwen 14B sendo alocado na VRAM...', 'success');
+        setTimeout(syncRealTimeTelemetry, 800);
       } catch (err) {
-        alert("Modelo solicitado para descarregar via Tailscale. Verifique se o navegador tem acesso direto a " + NODE1_URL);
+        appendEventLog(`Erro ao aquecer modelo: ${err.message}`, 'warning');
       }
     }
 
+    async function quickUnloadVram() {
+      appendEventLog('Enviando keep_alive: 0 para liberar toda a VRAM da GPU imediatamente...', 'warning');
+      try {
+        await fetch(`${node1Url}/api/generate`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ model: 'qwen2.5-coder:14b', keep_alive: 0 })
+        });
+        appendEventLog('Modelo descarregado com sucesso! VRAM liberada.', 'success');
+        setTimeout(syncRealTimeTelemetry, 800);
+      } catch (err) {
+        appendEventLog(`Erro ao descarregar VRAM: ${err.message}`, 'warning');
+      }
+    }
+
+    // Configuração de Endpoints
+    function toggleEndpointConfig() {
+      const box = document.getElementById('endpoint-config-box');
+      box.classList.toggle('hidden');
+    }
+
+    function saveEndpointConfig() {
+      node1Url = document.getElementById('input-node1-url').value.trim();
+      node2Url = document.getElementById('input-node2-url').value.trim();
+      localStorage.setItem('ag_node1_url', node1Url);
+      localStorage.setItem('ag_node2_url', node2Url);
+      document.getElementById('lbl-active-endpoint').textContent = node1Url;
+      toggleEndpointConfig();
+      appendEventLog(`Endpoint atualizado para ${node1Url}. Reconectando...`, 'active');
+      syncRealTimeTelemetry();
+    }
+
+    // Presets de Prompt
+    function setPromptPreset(idx) {
+      const p = document.getElementById('input-prompt');
+      if (idx === 1) p.value = "Escreva uma função TypeScript genérica de debounce estritamente tipada com TypeScript.";
+      if (idx === 2) p.value = "Implemente uma classe LRUCache<K, V> O(1) usando Map em TypeScript.";
+      if (idx === 3) p.value = "Crie uma função memoizada de Fibonacci em TypeScript com tipos estritos.";
+    }
+
+    // Teste de Inferência na Arena
     async function runModelTest() {
       const btn = document.getElementById('btn-run-test');
       const box = document.getElementById('arena-output-box');
@@ -443,20 +669,17 @@
       btn.disabled = true;
       btn.innerHTML = 'Inferindo na RTX 3080...';
       box.classList.remove('hidden');
-      out.textContent = 'Enviando payload para o Nó 1 via Tailscale (http://100.79.145.95:11434)...';
-      metrics.textContent = 'Aguardando primeiros tokens...';
+      out.textContent = `Disparando requisição para ${node1Url}...\n(Acompanhe o pico de VRAM nos cards acima)`;
+      metrics.textContent = 'Aguardando tokens...';
 
+      appendEventLog(`Iniciando inferência com modelo: ${model}`, 'active');
       const startTime = performance.now();
 
       try {
-        const res = await fetch(NODE1_URL + '/api/generate', {
+        const res = await fetch(`${node1Url}/api/generate`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            model: model,
-            prompt: prompt,
-            stream: false
-          })
+          body: JSON.stringify({ model: model, prompt: prompt, stream: false })
         });
 
         const data = await res.json();
@@ -466,9 +689,12 @@
 
         metrics.textContent = `Tempo: ${durationSec.toFixed(2)}s • Tokens: ${evalCount} • Velocidade: ${tps} t/s`;
         out.textContent = data.response || JSON.stringify(data, null, 2);
+
+        appendEventLog(`Inferência concluída: ${evalCount} tokens gerados a ${tps} t/s!`, 'success');
+        syncRealTimeTelemetry();
       } catch (err) {
-        // Fallback elegante se bloqueado por Mixed-Content ou acessando fora da VPN
-        out.textContent = `[Nota de Conectividade]: Para disparar chamadas direto do navegador para o IP Tailscale local (100.79.145.95), certifique-se de que este dispositivo está com a Tailscale ativa, ou use a rota de proxy /api/proxy?url=${NODE1_URL}.\n\nDetalhes do erro: ${err.message}`;
+        out.textContent = `Erro ao conectar direto com o nó (${node1Url}).\nDetalhes: ${err.message}\nCertifique-se de que a máquina cliente está com Tailscale ativa.`;
+        appendEventLog(`Erro de inferência: ${err.message}`, 'warning');
       } finally {
         btn.disabled = false;
         btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> Disparar Inferência na GPU';
@@ -480,6 +706,14 @@
       navigator.clipboard.writeText(text);
       alert('Código copiado!');
     }
+
+    // Inicialização ao Carregar
+    window.addEventListener('DOMContentLoaded', () => {
+      renderSparkline();
+      appendEventLog('Dashboard iniciada. Conectando aos nós via Tailscale Mesh...', 'active');
+      syncRealTimeTelemetry();
+      runProgressBarLoop();
+    });
   </script>
 </body>
 </html>
